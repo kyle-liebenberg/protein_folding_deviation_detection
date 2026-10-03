@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom 
+plan.md
+# Project: cached raw data (re-downloaded by src/data.py if missing)
+data/
