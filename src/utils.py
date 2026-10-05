@@ -17,10 +17,20 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
+def use_single_cpu_thread() -> None:
+    """Run PyTorch on one CPU thread.
+
+    Measured on our MLPs: 0.018 s/epoch with 1 thread vs 0.065 s/epoch with 8. For tiny matrix
+    multiplications, coordinating threads costs more than it saves. We get parallelism by running
+    several CV folds at once in separate processes instead (see src/cv.py).
+    """
+    torch.set_num_threads(1)
+
+
 def get_device(prefer_gpu: bool = False) -> torch.device:
     """Return the device to train on. Defaults to CPU.
 
-    Why CPU by default: our MLPs are tiny (9 inputs, a few thousand weights). For a network this
+    Why CPU by default: our MLPs are tiny (8 inputs, a few thousand weights). For a network this
     small, the overhead of sending each mini-batch to the Apple GPU (MPS) costs more than the GPU
     saves, and CPU results are bit-for-bit reproducible. Pass `prefer_gpu=True` to use MPS/CUDA
     when it is available.
