@@ -78,8 +78,120 @@ and per-bin reporting. Details: [01 §5](01-data-preparation.md#5-imbalance).
 
 ---
 
-## Axis A: Optimisers *(Phase 3, to come)*
+## Phase 3: shared measurements
 
-## Axis B: Architecture *(Phase 3, to come)*
+> **Status: hypotheses drafted 2026-10-06, awaiting your approval. Not yet run.** Once approved, commit
+> this file *before* the experiments run. The git history then proves the hypotheses came first.
 
-## Axis C: Activation functions *(Phase 3, to come)*
+Every axis reports the same four things, so the axes can be compared:
+
+| Measure | Definition | Answers |
+|---|---|---|
+| **Final quality** | CV RMSE (Å) of the early-stopped model, mean ± std over 5 folds, averaged over **3 seeds** | "How good does it get?" |
+| **Convergence speed** | Epochs until the early-stopping MSE first drops below **0.50** (standardised units: predict-the-mean = 1.0, baseline ends at ≈ 0.43) | "How fast does it get good?" |
+| **Stability** | Folds that diverged, plus the spread (std) across folds and seeds | "How reliable is it?" |
+| **Learning curves** | Early-stopping MSE per epoch, averaged over folds | Shows *how* the above differ |
+
+**What counts as a real difference:** larger than the baseline's noise (seed ~0.015 Å, fold std
+0.03–0.05 Å) and in the same direction for all 3 seeds.
+
+**Expectation that frames all three axes:** Phase 2 showed an MLP and boosted trees both stop at
+R² ≈ 0.55, so the features probably set the ceiling. We therefore expect **small differences in final
+RMSE** between sensible configurations, and **larger differences in speed and stability**. Several
+hypotheses below are stated that way on purpose.
+
+---
+
+## Axis A: Optimisers
+
+**Design.** SGD, SGD + momentum (β = 0.9), RMSprop and Adam, each on the **same learning-rate grid**
+{1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1} × 3 seeds. Everything else is the baseline (2×64 ReLU,
+He init, batch 256, constant LR, early stopping). Why one shared grid: each optimiser has a different
+natural LR scale, so comparing them at one fixed LR would be unfair. The grid finds each optimiser's
+best LR *and* shows how sensitive it is to the choice. This also feeds Part 2, which is about LR
+tolerance.
+
+**Hypotheses.**
+- **H-A1 (speed):** at their best LRs, **Adam and RMSprop reach MSE < 0.50 in the fewest epochs,
+  plain SGD in the most, with momentum in between.**
+  *Why:* momentum accumulates a velocity along directions the gradient keeps pointing in, which speeds
+  up progress and damps zig-zagging. Adam and RMSprop also divide each weight's step by a running
+  average of its gradient size, so weights with small gradients still move.
+- **H-A2 (final quality):** at their best LRs, **all four optimisers reach a final CV RMSE within
+  ~0.05 Å of each other.**
+  *Why:* if the features cap performance (R² ≈ 0.55), the optimiser decides how quickly we reach the
+  ceiling, not how high it is.
+- **H-A3 (LR sensitivity and stability):** **Adam and RMSprop give near-best RMSE over a wider range of
+  LRs than SGD does. SGD with momentum diverges at a lower LR than plain SGD.**
+  *Why:* adaptive methods normalise the step size, which makes them forgiving. With β = 0.9,
+  momentum's effective step is about η / (1 − β) = 10η, so it should blow up roughly one grid step
+  earlier than plain SGD.
+
+**Evidence that would contradict them:** SGD converging as fast as Adam (H-A1). A gap > 0.05 Å that is
+consistent across seeds (H-A2). Adam failing over as wide an LR range as SGD (H-A3).
+
+---
+
+## Axis B: Architecture (depth vs width)
+
+**Design.** Depth {1, 2, 3, 4} hidden layers × width {16, 64, 256} units per layer, giving 12
+architectures from 161 to ~200k parameters, × 3 seeds. Baseline optimiser (Adam 1e-3), ReLU + He init,
+early stopping. Also recorded: **parameter count**, **best epoch**, and the **train–validation gap**
+at the best epoch (an overfitting indicator).
+
+**Hypotheses.**
+- **H-B1 (width, diminishing returns):** **going from 16 to 64 units clearly lowers RMSE. Going from
+  64 to 256 helps much less (< 0.05 Å).**
+  *Why:* 16 units may be too few to model the non-linear relationships, but with only 8 inputs and a
+  feature-limited ceiling, extra capacity beyond ~64 has little left to capture.
+- **H-B2 (depth):** **1 hidden layer is worse than 2 at the same width, but going beyond 2 layers
+  gives little further gain (< 0.05 Å).**
+  *Why:* a second layer lets the network build features out of features (composition), which is more
+  efficient than one wide layer. Beyond that, the same ceiling applies, and deeper nets are harder to
+  optimise.
+- **H-B3 (overfitting vs early stopping):** **larger networks overfit sooner (earlier best epoch,
+  larger train–validation gap), but early stopping prevents them from ending up *worse* than the
+  medium networks.**
+  *Why:* more parameters means more capacity to memorise the training rows. Early stopping cuts
+  training off before that memorisation hurts the validation error.
+
+**Evidence that would contradict them:** 256-wide nets clearly beating 64-wide ones (H-B1). One layer
+matching two (H-B2). The largest nets ending worse than medium ones despite early stopping (H-B3).
+
+*Caveat to state in the report:* all architectures share Adam at LR 1e-3. A different LR might suit
+some sizes better. We control for this by keeping the LR fixed, and note it as a limitation.
+
+---
+
+## Axis C: Activation functions
+
+**Design.** Sigmoid, tanh, ReLU and Leaky ReLU (slope 0.01), each with its matching initialisation
+(Xavier for sigmoid/tanh, He for the ReLU family). Run at the baseline depth (**2 × 64**) and a
+deeper net (**4 × 64**), × 3 seeds, with the baseline optimiser (Adam 1e-3). Two extra diagnostics:
+- **Gradient flow at initialisation:** on one batch, the average gradient size of the *first* layer's
+  weights divided by the *last* layer's. A ratio far below 1 means gradients shrink as they travel
+  backwards, i.e. **vanishing gradients**.
+- **Dead units (ReLU family):** the fraction of hidden units that output 0 for *every* validation row
+  after training.
+
+**Hypotheses.**
+- **H-C1 (speed):** **the ReLU family reaches MSE < 0.50 fastest, tanh next, and sigmoid slowest.**
+  *Why:* sigmoid's derivative is at most 0.25 and its outputs are all positive (not zero-centred),
+  which slows learning. tanh is zero-centred with derivative up to 1. ReLU's derivative is exactly 1
+  for active units.
+- **H-C2 (depth makes sigmoid worse: vanishing gradients):** **sigmoid's gradient ratio (first ÷ last
+  layer) is far smaller than the others' and shrinks further from 2 to 4 layers. Its RMSE gap to the
+  other activations is larger at depth 4 than at depth 2.**
+  *Why:* backpropagation multiplies by the activation's derivative once per layer. For sigmoid that
+  factor is ≤ 0.25, so the gradient can shrink by up to 4× per layer.
+  *Expected moderation:* Adam rescales each weight's update by its own gradient history, which partly
+  undoes small gradients. So we expect the effect to be clearly visible in the gradient diagnostic,
+  but **smaller in final RMSE** than it would be with plain SGD.
+- **H-C3 (final quality, ReLU vs Leaky ReLU):** **tanh, ReLU and Leaky ReLU end within ~0.05 Å of each
+  other, and Leaky ReLU gives no real advantage over ReLU, because few ReLU units die in a small,
+  well-initialised network with standardised inputs** (dead fraction < 10 %).
+  *Why:* Leaky ReLU fixes "dead" units, which stop learning once they output 0 for every input. That
+  only matters if many units die.
+
+**Evidence that would contradict them:** sigmoid training as fast as ReLU (H-C1). No depth-dependent
+shrinking of sigmoid's gradients (H-C2). Many dead ReLU units and Leaky ReLU clearly winning (H-C3).
