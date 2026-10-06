@@ -19,7 +19,7 @@ We use it to study two things:
 | [`docs/assignment-brief.md`](docs/assignment-brief.md) | Condensed version of the assignment spec |
 | [`docs/01-data-preparation.md`](docs/01-data-preparation.md) | Data prep decisions and justifications |
 | [`docs/02-core-investigation.md`](docs/02-core-investigation.md) | Baseline, then hypotheses, results and verdicts for optimisers, architecture and activations |
-| `docs/03-warmup-pruning.md` | Research hypotheses, design, results *(Phase 4)* |
+| [`docs/03-warmup-pruning.md`](docs/03-warmup-pruning.md) | Research hypotheses, design, results *(Phase 4)* |
 | [`docs/study-notes.md`](docs/study-notes.md) | Theory and Q&A for Semester Test 2 (built up each phase) |
 
 ## Project structure
