@@ -9,7 +9,7 @@ We use it to study two things:
 2. **Research investigation:** whether **learning-rate warmup** makes a network more **robust to
    magnitude pruning**, and whether that happens because warmup allows a larger learning rate.
 
-> **Status:** Phases 0–2 done (setup, data preparation, MLP + training + baseline). See [`plan.md`](plan.md) for the task list and progress.
+> **Status:** Phases 0–3 done (setup, data preparation, MLP + baseline, core investigation). See [`plan.md`](plan.md) for the task list and progress.
 
 ## Documentation map
 
@@ -18,7 +18,7 @@ We use it to study two things:
 | [`plan.md`](plan.md) | TODO list, decisions needed, decision log |
 | [`docs/assignment-brief.md`](docs/assignment-brief.md) | Condensed version of the assignment spec |
 | [`docs/01-data-preparation.md`](docs/01-data-preparation.md) | Data prep decisions and justifications |
-| [`docs/02-core-investigation.md`](docs/02-core-investigation.md) | Baseline, plus hypotheses, results and interpretation per axis *(axes: Phase 3)* |
+| [`docs/02-core-investigation.md`](docs/02-core-investigation.md) | Baseline, then hypotheses, results and verdicts for optimisers, architecture and activations |
 | `docs/03-warmup-pruning.md` | Research hypotheses, design, results *(Phase 4)* |
 | [`docs/study-notes.md`](docs/study-notes.md) | Theory and Q&A for Semester Test 2 (built up each phase) |
 
@@ -41,6 +41,8 @@ We use it to study two things:
 │   ├── evaluation.py        # RMSE / MAE / R², per-bin metrics
 │   ├── plotting.py          # shared figure style and colours
 │   ├── cv.py                # k-fold cross-validation runner
+│   ├── experiments.py       # experiment grids (configs × seeds), cached in results/
+│   ├── diagnostics.py       # gradient flow, dead units, convergence speed
 │   └── pruning.py           # magnitude pruning and masks
 ├── notebooks/
 │   └── A1_protein_mlp.ipynb # the submitted notebook: narrative + experiments

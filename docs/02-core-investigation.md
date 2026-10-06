@@ -59,10 +59,11 @@ Learning curves: `figures/phase2/baseline_learning_curves.png`.
   epochs, and the gap widens. That's the onset of **overfitting**. Early stopping kept epochs 117–196.
   The early-stopping curve is jagged because the LR is constant: mini-batch noise keeps the weights
   jittering around a minimum. LR decay would let them settle (relevant to the warmup study).
-- **A ceiling:** an MLP and boosted trees both stop at R² ≈ 0.55. The limit is probably the
-  *information in the features*, not the model. Phase 3 should therefore expect **small differences
-  in final RMSE** between reasonable configurations. The more revealing differences may be in
-  **convergence speed and stability**.
+- **~~A ceiling~~ (corrected after Phase 3):** an MLP and boosted trees both stopped at R² ≈ 0.55,
+  which suggested the features set a ceiling. **Phase 3 disproved this:** a 4 × 256 MLP reaches
+  R² ≈ 0.615 (3.81 Å). Both baselines were limited by capacity and default settings. Two models
+  agreeing is weak evidence of a ceiling. (The Phase 3 hypotheses were written while we still believed
+  in the ceiling, which is why several of them under-estimate the effect of capacity.)
 
 ### Two decisions re-checked with the MLP
 
@@ -80,8 +81,9 @@ and per-bin reporting. Details: [01 §5](01-data-preparation.md#5-imbalance).
 
 ## Phase 3: shared measurements
 
-> **Status: hypotheses drafted 2026-10-06, awaiting your approval. Not yet run.** Once approved, commit
-> this file *before* the experiments run. The git history then proves the hypotheses came first.
+> **Status:** hypotheses approved and committed on 2026-10-06 (commit `90ef669`) **before** any Phase 3
+> experiment ran. The hypothesis text below is unchanged from that commit. Results and verdicts are
+> added under each axis.
 
 Every axis reports the same four things, so the axes can be compared:
 
@@ -130,6 +132,44 @@ tolerance.
 **Evidence that would contradict them:** SGD converging as fast as Adam (H-A1). A gap > 0.05 Å that is
 consistent across seeds (H-A2). Adam failing over as wide an LR range as SGD (H-A3).
 
+### Results (notebook §3.1, `results/phase3_optimisers.csv`, `figures/phase3/optimisers_*.png`)
+
+Each optimiser at its own best LR (3 seeds × 5 folds). Speed = epochs until early-stopping MSE < 0.50.
+
+| Optimiser | Best LR | CV RMSE (Å) | Epochs to 0.50 | Grid LRs within 0.10 Å of the overall best |
+|---|---|---|---|---|
+| **Adam** | 1e-2 | **3.99** ± 0.05 | **9.7** | 3 |
+| SGD + momentum | 3e-2 | 4.03 ± 0.04 | 12.5 | 2 |
+| RMSprop | 3e-3 | 4.21 ± 0.08 (seed std 0.09) | 29.5 | 0 |
+| SGD | 3e-3 | 4.39 ± 0.06 | 293 (only 6/15 folds reached it) | 0 |
+
+Failures at high LR: RMSprop diverged in 11/15 folds at 3e-2 and 15/15 at 1e-1. Momentum broke at 1e-1
+(RMSE 5.78 Å, 2/15 diverged). Plain SGD still trained at 1e-1 (4.44 Å). Adam degraded without
+diverging (4.21 Å at 3e-2, 4.75 Å at 1e-1).
+
+### Verdicts
+
+- **H-A1 (speed): partly supported.** Adam fastest and SGD slowest, as predicted. But **momentum beat
+  RMSprop**: momentum alone gives a ~20× speed-up over plain SGD. Adam's speed seems to come largely
+  from the momentum it contains, not only from its adaptive scaling.
+- **H-A2 (final quality within 0.05 Å): contradicted.** The spread is 0.40 Å. Only Adam and momentum
+  are close. Plain SGD at small LRs hit the 500-epoch limit still improving, and at larger LRs early
+  stopping ended it after 40–85 epochs at a worse RMSE. Under a fixed budget and stopping rule,
+  **speed becomes final quality**. The hypothesis also relied on the feature "ceiling", which Axis B
+  disproved.
+- **H-A3 (LR tolerance): supported for Adam, contradicted for RMSprop. The momentum part is supported.**
+  Adam is the most tolerant (3 good LRs), but RMSprop is the **least** tolerant. Momentum fails at
+  1e-1 while plain SGD survives, consistent with its ~10× effective step.
+
+**Why RMSprop is fragile (verified with a separate measurement):** PyTorch's RMSprop has **no bias
+correction**. Its running average of g² starts at 0, so its first update is **10× the LR** (≈ 4× after
+5 steps), while Adam's bias-corrected first update is exactly 1× the LR. Oversized steps at the very
+start of training is precisely the problem **warmup** is meant to solve.
+
+**Side effect of large LRs: dead units.** Adam's fraction of dead ReLU units rises from 0.3 % (LR 1e-3)
+to 10 % (1e-2), 32 % (3e-2) and 48 % (1e-1). Big steps knock units into the never-active region. This
+is relevant to Part 2, because dead units are "free" sparsity.
+
 ---
 
 ## Axis B: Architecture (depth vs width)
@@ -160,6 +200,34 @@ matching two (H-B2). The largest nets ending worse than medium ones despite earl
 
 *Caveat to state in the report:* all architectures share Adam at LR 1e-3. A different LR might suit
 some sizes better. We control for this by keeping the LR fixed, and note it as a limitation.
+
+### Results (notebook §3.2, `results/phase3_architecture.csv`, `figures/phase3/architecture.png`)
+
+CV RMSE (Å), mean over 3 seeds (seed std ≤ 0.03 everywhere):
+
+| depth \ width | 16 | 64 | 256 |
+|---|---|---|---|
+| 1 | 4.63 | 4.39 | 4.23 |
+| 2 | 4.42 | **4.09** (baseline) | 3.95 |
+| 3 | 4.33 | 4.00 | 3.83 |
+| 4 | 4.30 | 3.97 | **3.81** (R² 0.615) |
+
+Best epoch falls from ~310 (1 × 16) to ~54 (4 × 256). The train–validation gap at the kept epoch rises
+from ≈ 0 to 0.19. Every paired comparison below was consistent in 3/3 seeds.
+
+### Verdicts
+
+- **H-B1 (width, diminishing returns): partly supported.** 16 → 64: −0.33 Å, 64 → 256: −0.14 Å (depth
+  2). The returns diminish, but the second step is ~3× the 0.05 Å we predicted.
+- **H-B2 (depth): first half supported, second half contradicted.** 1 → 2 layers: −0.30 Å. But 2 → 3
+  (−0.09 Å) and 2 → 4 (−0.12 Å) still help clearly.
+- **H-B3 (overfitting vs early stopping): supported.** Bigger nets overfit sooner and more (earlier
+  best epoch, larger gap), yet early stopping lets the biggest net finish best.
+
+**Extra observations:** depth is more parameter-efficient than width here: 4 × 64 (13k parameters)
+≈ 2 × 256 (68k parameters), within 0.014 Å. Bigger nets also *learn faster* (4 × 256 reaches MSE < 0.50
+in 5 epochs vs 21 for 2 × 64). **Our mistake:** H-B1/H-B2 assumed the Phase 2 "ceiling", which was
+really the baseline's capacity.
 
 ---
 
@@ -195,3 +263,50 @@ deeper net (**4 × 64**), × 3 seeds, with the baseline optimiser (Adam 1e-3). T
 
 **Evidence that would contradict them:** sigmoid training as fast as ReLU (H-C1). No depth-dependent
 shrinking of sigmoid's gradients (H-C2). Many dead ReLU units and Leaky ReLU clearly winning (H-C3).
+
+### Results (notebook §3.3, `results/phase3_activations.csv`, `figures/phase3/activations_*.png`)
+
+| Activation | RMSE 2×64 | RMSE 4×64 | Epochs to 0.50 (2×64 / 4×64) | Dead units |
+|---|---|---|---|---|
+| sigmoid | 4.34 | 4.26 | 423 / 340 (2×64: only 11/15 folds reached it) | — |
+| tanh | 4.06 | **3.90** | 64 / 21 | — |
+| ReLU | 4.09 | 3.97 | 21 / 8.6 | 0.3 % / 0.4 % |
+| Leaky ReLU | 4.10 | 3.96 | 21 / 8.5 | 0.2 % / 0.0 % |
+
+**Gradient flow at initialisation** (mean |gradient| of the first layer ÷ the output layer, 10 inits):
+
+| | depth 2 | depth 4 | depth 8 |
+|---|---|---|---|
+| sigmoid | 2.7e-3 | 1.7e-4 | **5.8e-7** |
+| tanh | 0.31 | 0.27 | 0.33 |
+| ReLU | 0.095 | 0.091 | 0.080 |
+
+With 8 sigmoid layers the gradient shrinks ≈ 4× per layer going backwards (0.56 at the output layer
+→ 3 × 10⁻⁷ at the first layer). ReLU and tanh hidden layers all receive similar gradients (flat).
+
+### Verdicts
+
+- **H-C1 (speed: ReLU family > tanh > sigmoid): supported.**
+- **H-C2 (vanishing gradients): supported, with the predicted moderation by Adam.** The ≈ 4× shrink per
+  layer is exactly what sigmoid's maximum derivative of 0.25 predicts, and it compounds with depth,
+  while tanh and ReLU stay flat. In RMSE, though, sigmoid's gap to ReLU grows only slightly (0.25 →
+  0.30 Å), and sigmoid itself *improves* from depth 2 to 4. Adam rescales each weight's step by its
+  own gradient history, so tiny gradients still give normal-sized updates. The damage shows up in
+  speed, not final quality.
+- **H-C3 (tanh ≈ ReLU ≈ Leaky ReLU, Leaky gains nothing): partly supported.** Leaky ReLU = ReLU (mixed
+  across seeds), and < 0.5 % of ReLU units die, so the reason we gave holds. But **tanh beat ReLU at
+  depth 4** (3.90 vs 3.97 Å, 3/3 seeds), beyond our threshold, while training ~2.5× slower. A plausible,
+  untested reason: tanh nets are smooth, whereas ReLU nets are piecewise-linear.
+
+---
+
+## Choice of base configuration for Part 2 (warmup vs pruning)
+
+| Choice | Value | Evidence |
+|---|---|---|
+| Architecture | **4 × 256** (~200k weights) | best RMSE, and plenty of redundant capacity to prune. ~10 s per fold |
+| Activation / init | **ReLU, He** | fastest. The standard in the pruning papers we follow. tanh's 0.07 Å edge isn't worth a slower, less comparable setup |
+| Optimiser | **SGD + momentum (β = 0.9)** | has a **sharp LR-tolerance boundary** (fine at 3e-2, broken at 1e-1), which is exactly what the warmup hypothesis concerns. Used by Frankle & Carbin and Renda et al. Adam degrades gradually and self-corrects its early steps, which would blur the effect |
+
+The LR boundary was measured on 2 × 64. Part 2's first experiment re-measures it on 4 × 256, with and
+without warmup.

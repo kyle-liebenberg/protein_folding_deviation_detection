@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 from joblib import Parallel, delayed
 
+from src.diagnostics import dead_unit_fraction, epochs_to_threshold
 from src.data import INPUT_FEATURES, TARGET, inverse_bin_frequency_weights, split_train_val, stratified_kfold
 from src.evaluation import regression_metrics
 from src.preprocessing import Preprocessor
@@ -36,9 +37,11 @@ class CVResult:
         for m in METRICS:
             out[f"{m}_mean"] = self.folds[m].mean()
             out[f"{m}_std"] = self.folds[m].std()
-        for extra in ["best_epoch", "seconds"]:
+        for extra in ["best_epoch", "epochs_to_threshold", "gap_at_best", "dead_fraction", "seconds"]:
             if extra in self.folds:
                 out[f"{extra}_mean"] = self.folds[extra].mean()
+        if "epochs_to_threshold" in self.folds:
+            out["folds_reaching_threshold"] = int(self.folds["epochs_to_threshold"].notna().sum())
         if "diverged" in self.folds:
             out["diverged_folds"] = int(self.folds["diverged"].sum())
         return pd.Series(out)
@@ -60,12 +63,24 @@ def cross_validate(config: TrainConfig, train_df: pd.DataFrame, k: int = 5,
 
     n_jobs > 1 runs folds in parallel processes (each on one CPU thread).
     """
-    jobs = [delayed(_run_mlp_fold)(config, train_df, fold, splits, features)
-            for fold, splits in enumerate(fold_splits(train_df, k))]
+    return cross_validate_many([config], train_df, k, features, n_jobs)[0]
+
+
+def cross_validate_many(configs: list[TrainConfig], train_df: pd.DataFrame, k: int = 5,
+                        features=INPUT_FEATURES, n_jobs: int = -1) -> list[CVResult]:
+    """cross_validate for a list of configurations, with ALL (configuration, fold) runs in one parallel
+    batch, so a whole experiment grid keeps every CPU core busy. Returns one CVResult per config."""
+    splits = fold_splits(train_df, k)
+    jobs = [delayed(_run_mlp_fold)(config, train_df, fold, fold_split, features)
+            for config in configs for fold, fold_split in enumerate(splits)]
     outputs = Parallel(n_jobs=n_jobs)(jobs)
-    return CVResult(folds=pd.DataFrame([row for row, _, _ in outputs]),
-                    histories=[history for _, history, _ in outputs],
-                    predictions=pd.concat([preds for _, _, preds in outputs]).sort_index())
+    results = []
+    for i in range(len(configs)):
+        mine = outputs[i * k:(i + 1) * k]
+        results.append(CVResult(folds=pd.DataFrame([row for row, _, _ in mine]),
+                                histories=[history for _, history, _ in mine],
+                                predictions=pd.concat([preds for _, _, preds in mine]).sort_index()))
+    return results
 
 
 def cross_validate_sklearn(make_model, train_df: pd.DataFrame, k: int = 5, features=INPUT_FEATURES) -> CVResult:
@@ -103,6 +118,12 @@ def _run_mlp_fold(config, df, fold, splits, features):
     result = train(config, X_fit, y_fit, X_stop, y_stop, sample_weights=weights)
     y_pred = prep.inverse_transform_y(predict(result.model, X_val))
 
+    best = result.best_epoch - 1
     row = {"fold": fold, **regression_metrics(y_val_angstrom, y_pred), "best_epoch": result.best_epoch,
-           "epochs_run": result.epochs_run, "diverged": result.diverged, "seconds": result.seconds}
+           "epochs_run": result.epochs_run, "diverged": result.diverged, "seconds": result.seconds,
+           # convergence speed: first epoch with early-stopping MSE below the threshold
+           "epochs_to_threshold": epochs_to_threshold(result.history["val_loss"]),
+           # overfitting indicator: validation minus training loss at the kept epoch
+           "gap_at_best": result.history["val_loss"][best] - result.history["train_loss"][best] if best >= 0 else float("nan"),
+           "dead_fraction": dead_unit_fraction(result.model, X_val) if config.activation in ("relu", "leaky_relu") else float("nan")}
     return row, result.history, _predictions_frame(val_idx, fold, y_val_angstrom, y_pred)

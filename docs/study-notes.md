@@ -39,7 +39,7 @@ that because warmup allows a larger learning rate?
   - [A7 Scaling: z-score vs min-max vs batch normalisation](#a7-scaling-z-score-vs-min-max-vs-batch-normalisation)
   - [A8 Test-prep questions with answers](#a8-test-prep-questions-with-answers)
 - [Part B: The MLP and training](#part-b-the-mlp-and-training) (Phase 2)
-- Part C: Core investigation *(Phase 3)*
+- [Part C: Core investigation](#part-c-core-investigation) (Phase 3)
 - Part D: Warmup and pruning *(Phase 4)*
 
 ---
@@ -333,7 +333,8 @@ A number like "RMSE 4.09 Å" means nothing on its own. Baselines give it a scale
 - **Linear regression** (RMSE 5.19 Å, R² 0.29) tests whether non-linearity is needed. The MLP's ~21 %
   lower error says yes.
 - **Gradient boosting** (4.13 Å) is a strong non-neural reference. The MLP matching it says our MLP
-  is not under-performing. Both stopping at R² ≈ 0.55 suggests the *features* set the limit.
+  is not under-performing. Both stopping at R² ≈ 0.55 *seemed* to show that the features set the
+  limit, but Phase 3 disproved it (a 4 × 256 MLP reaches R² 0.615). See B8 Q10.
 
 ### B4 Weight initialisation (in `src/model.py`)
 
@@ -403,6 +404,135 @@ steps so they settle.
 the features don't distinguish those decoys well, so it hedges towards the middle. Weighting mostly
 shifted all predictions up (hurting the common low bins) instead of fixing that.
 
-**10. Two models (MLP, boosted trees) both reach R² ≈ 0.55. What does that suggest?** The limit is
-the information in the features, not the model's capacity. Expect small differences between
-reasonable MLP configurations.
+**10. Two models (MLP, boosted trees) both reach R² ≈ 0.55. What does that suggest?** It *suggests*
+a ceiling set by the features, and we believed that in Phase 2. **But it was wrong:** a larger MLP
+(4 × 256) reaches R² 0.615. Both baselines were limited by capacity and default settings. Lesson: two
+models agreeing is weak evidence of a ceiling. Test it by scaling the model up.
+
+---
+
+## Part C: Core investigation
+
+Hypotheses and results: [`02-core-investigation.md`](02-core-investigation.md). Notebook section 3.
+
+### C1 The four optimisers
+
+Notation: w = a weight, g = its gradient at this step, η = learning rate.
+
+| Optimiser | Update rule (per weight) | Idea in one line |
+|---|---|---|
+| **SGD** | w ← w − η·g | Step downhill, using the mini-batch gradient |
+| **SGD + momentum** | v ← β·v + g  then  w ← w − η·v  (β = 0.9) | Keep a running "velocity". Consistent directions build up speed, and zig-zags cancel out |
+| **RMSprop** | s ← ρ·s + (1 − ρ)·g²  then  w ← w − η·g / (√s + ε) | Divide by the recent typical gradient size, so every weight takes similar-sized steps |
+| **Adam** | m ← β₁m + (1 − β₁)g, s ← β₂s + (1 − β₂)g², bias-correct both, then w ← w − η·m̂ / (√ŝ + ε) | Momentum (m) **plus** RMSprop-style scaling (s) |
+
+**Key facts:**
+- **Momentum's effective step:** if the gradient stays roughly the same, v grows to g / (1 − β), so with
+  β = 0.9 the step is about **10× η**. That's why momentum tolerates a smaller maximum LR than plain SGD.
+- **Adaptive methods (RMSprop, Adam)** make the step size roughly independent of the gradient's scale.
+  That makes them forgiving of the LR choice, and it partly hides vanishing gradients (a tiny g is
+  divided by a tiny √s).
+- **Bias correction in Adam:** m and s start at 0, so early on they underestimate the true averages.
+  Dividing by (1 − βᵗ) fixes that for the first steps.
+- **Why compare on an LR grid, not one LR:** each optimiser has its own natural LR scale (SGD ~1e-2,
+  Adam ~1e-3). One fixed LR would favour whichever optimiser it happens to suit.
+
+### C2 Depth vs width
+
+- **Width** (units per layer): how many features a layer can compute side by side. **Depth** (number of
+  layers): how many times features can be built *from* other features (composition).
+- **Universal approximation:** one hidden layer can approximate any continuous function, *given enough
+  units*. Depth can do the same job with far fewer units for functions with a compositional structure.
+- **Costs of depth:** longer backpropagation paths, so a higher risk of vanishing or exploding gradients,
+  and harder optimisation.
+- **Costs of size in general:** more parameters means more capacity to memorise the training rows
+  (overfitting), and slower training. Early stopping limits the overfitting.
+- **Parameter count** of a dense layer = inputs × outputs + outputs (the biases). Our 2×64 net:
+  (8·64 + 64) + (64·64 + 64) + (64·1 + 1) = 4,801.
+
+### C3 Activation functions
+
+| Activation | Formula | Derivative | Output range | Notes |
+|---|---|---|---|---|
+| **Sigmoid** | 1 / (1 + e⁻ˣ) | σ(x)(1 − σ(x)) ≤ **0.25** | (0, 1) | Saturates. Not zero-centred |
+| **tanh** | (eˣ − e⁻ˣ) / (eˣ + e⁻ˣ) | 1 − tanh²(x) ≤ **1** | (−1, 1) | Saturates, but zero-centred |
+| **ReLU** | max(0, x) | 1 if x > 0, else 0 | [0, ∞) | No saturation for x > 0. Cheap. Can "die" |
+| **Leaky ReLU** | x if x > 0, else 0.01x | 1 or 0.01 | (−∞, ∞) | Never fully dead |
+
+- **Saturation:** for large |x|, sigmoid and tanh flatten out, so their derivative ≈ 0 and the
+  gradient through them almost vanishes.
+- **Vanishing gradients:** backprop multiplies by one activation derivative per layer. With sigmoid,
+  each factor is ≤ 0.25, so over L layers the gradient reaching the first layer can shrink by up to
+  0.25ᴸ. The early layers then barely learn. ReLU's derivative is exactly 1 for active units, so it
+  passes gradients through undiminished.
+- **Zero-centring:** sigmoid outputs are all positive, so the next layer's inputs are all positive, and
+  all of a unit's weight gradients share one sign (zig-zag updates). tanh is centred on 0, which avoids
+  this.
+- **Dead ReLU:** if a unit's input becomes ≤ 0 for every row (e.g. after a large update pushes its bias
+  very negative), it outputs 0 everywhere, its gradient is 0, and it can never recover. Leaky ReLU keeps
+  a small slope (0.01) for negative inputs, so the unit can come back.
+- **Matching initialisation:** Xavier for sigmoid/tanh, He for the ReLU family (B4).
+
+### C4 What we found (verdicts in one place)
+
+| Hypothesis | Verdict | Key number |
+|---|---|---|
+| H-A1 Adam/RMSprop fastest, SGD slowest | **Partly.** Adam fastest, SGD slowest, but momentum beat RMSprop | epochs to 0.50: Adam 9.7, momentum 12.5, RMSprop 29.5, SGD 293 |
+| H-A2 All optimisers end within 0.05 Å | **Contradicted** | 3.99 (Adam) … 4.39 Å (SGD) |
+| H-A3 Adaptive = LR-tolerant. Momentum breaks before SGD | **Adam yes, RMSprop no (least tolerant). Momentum part yes** | RMSprop diverges at ≥ 3e-2. Momentum breaks at 1e-1, SGD doesn't |
+| H-B1 Width: big gain 16→64, < 0.05 Å for 64→256 | **Partly.** Diminishing, but still −0.14 Å | −0.33 / −0.14 Å |
+| H-B2 Depth: 1→2 helps, beyond 2 doesn't | **Half.** 1→2 yes, 2→4 still −0.12 Å | best: 4 × 256 = 3.81 Å |
+| H-B3 Bigger nets overfit sooner, early stopping saves them | **Supported** | best epoch 310 → 54, gap 0 → 0.19 |
+| H-C1 ReLU > tanh > sigmoid in speed | **Supported** | 8.6 / 21 / 340 epochs (4 × 64) |
+| H-C2 Sigmoid gradients vanish with depth, moderated by Adam | **Supported** | ≈ 4× shrink per layer. First ÷ last = 5.8e-7 at depth 8 |
+| H-C3 tanh ≈ ReLU ≈ Leaky, Leaky gains nothing | **Partly.** Leaky = ReLU (< 0.5 % dead), but tanh beat ReLU at depth 4 | 3.90 vs 3.97 Å |
+
+**The big lesson:** several hypotheses failed because they rested on the "feature ceiling" from Phase
+2. The baseline was actually limited by capacity. Being wrong for a clear, identifiable reason is a
+legitimate and useful result.
+
+### C5 Test-prep questions with answers
+
+**1. Why compare optimisers on an LR grid rather than at one LR?** Each optimiser has its own natural
+LR scale. At a single LR, the comparison mostly measures which optimiser that LR happens to suit. On a
+grid we compare each at its *best* LR and also see how sensitive it is.
+
+**2. Why did momentum diverge at an LR where plain SGD still trained?** With β = 0.9 the velocity
+accumulates to ≈ g / (1 − β) = 10g, so the effective step is ~10× the LR. At LR 0.1 that is like plain
+SGD at LR 1, which is too large.
+
+**3. Why was RMSprop the most fragile at high LRs, when Adam was the most tolerant?** PyTorch's RMSprop
+has no bias correction. Its g² average starts at 0, so the first steps are ~10× the LR (we measured
+exactly 10× on step 1). Adam bias-corrects, so its first step is 1× the LR. Oversized early steps are
+also the classic motivation for warmup.
+
+**4. Why did "final quality" differ even though the network was the same?** Under a fixed epoch budget
+and early stopping, a slow optimiser (plain SGD) never reaches the good region. Its best epoch was
+≈ 500 = the limit. Speed turns into quality when training time is limited.
+
+**5. Bigger networks overfit more. Why was the biggest one still the best?** Early stopping stopped it
+at epoch ~54, before the overfitting hurt the validation error. Capacity helps as long as something
+(here early stopping) controls the overfitting.
+
+**6. Depth or width: which was more efficient here?** Depth. 4 × 64 (13k parameters) matched 2 × 256
+(68k parameters).
+
+**7. Explain the sigmoid gradient plot.** Backprop multiplies by each layer's activation derivative.
+Sigmoid's is at most 0.25, so each layer shrinks the gradient ≈ 4×. Over 8 layers that compounds to
+≈ 10⁻⁶ at the first layer: **vanishing gradients**. tanh (derivative up to 1) and ReLU (exactly 1 for
+active units) keep gradients roughly constant across hidden layers.
+
+**8. If sigmoid's gradients vanish so badly, why did it still reach 4.26 Å?** Adam divides each
+weight's step by its own running gradient size, so tiny gradients still produce normal-sized steps. The
+vanishing showed up as *slow* training (340 vs 8.6 epochs), not as failure. With plain SGD it would
+be far worse.
+
+**9. Why didn't Leaky ReLU beat ReLU?** Leaky ReLU fixes *dead* units, and fewer than 0.5 % of our ReLU
+units died (small network, He init, standardised inputs, moderate LR). There was nothing to fix. At
+high LRs, though (Adam at 1e-1: 48 % dead), it might matter.
+
+**10. Why choose SGD + momentum for Part 2 when Adam was best?** Part 2 tests whether warmup raises
+the LR a network can tolerate. Momentum has a *sharp* tolerance boundary (fine at 3e-2, broken at
+1e-1), so an effect of warmup on that boundary is easy to see. Adam degrades gradually and already
+self-corrects its first steps (bias correction), which would blur the effect. Momentum SGD is also
+what the original papers used.
