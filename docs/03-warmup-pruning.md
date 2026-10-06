@@ -1,8 +1,9 @@
 # 03: Research Investigation: Warmup and Pruning Robustness
 
-> Covers spec §2.3. **Status: hypotheses and design drafted on 2026-10-06, awaiting your approval.
-> Not yet run** (apart from the calibration pilot described below). Once approved, commit this file
-> *before* the experiments run.
+> Covers spec §2.3. **Status:** hypotheses, design and decision rules approved and committed on
+> 2026-10-06 (commit `243937b`) **before** the experiments ran. Sections 1–6 are unchanged from that
+> commit. Results are in §7. Code: `src/warmup_pruning.py`, `src/pruning.py`. Notebook section 4.
+> Figures in `figures/phase4/`. Raw numbers in `results/phase4_*.csv`.
 
 ## 1. Background (from the three references)
 
@@ -126,4 +127,108 @@ small MLP is very different from the deep image classifiers in [1, 2].
 
 ## 7. Results
 
-*(to be added after the experiments run)*
+### Step 1: LR tolerance (H1). **Strongly supported**
+
+| Peak LR | 0.005 | 0.01 | 0.02 | 0.03 | 0.05 | 0.1 | 0.2 |
+|---|---|---|---|---|---|---|---|
+| No warmup: val RMSE (diverged seeds) | 3.73 (0/3) | 3.80 (**2/3**) | — (3/3) | — (3/3) | — (3/3) | — (3/3) | — (3/3) |
+| 5-epoch warmup: val RMSE (diverged seeds) | 3.68 (0/3) | **3.63** (0/3) | 3.63 (0/3) | 3.66 (0/3) | 3.71 (0/3) | 3.71 (0/3) | 3.73 (0/3) |
+
+- Max stable LR: **0.005 without warmup, 0.1 with warmup** (0.2 also trains, but is 0.005 Å outside
+  the 0.10 Å tolerance). The tolerable LR is **≥ 20× higher**, 4 grid steps.
+- **All 17 no-warmup divergences happen in the first epoch.** The first large steps destroy the network
+  before it can reach a region where large steps are safe. This is the mechanism described in [3].
+- Warmup also gave better unpruned models (best 3.63 vs 3.73 Å).
+
+**Conditions selected by the pre-registered rules:** A = no warmup, η₀ = 0.005. **B = warmup, η₁ = 0.2**
+(the largest warmup LR within 0.05 Å of A: 3.730 vs 3.732 Å. Warmup LRs 0.01–0.03 were ~0.1 Å *better*
+than A, so not "comparable"). C = warmup at 0.005.
+
+### Step 3: Pruning robustness (H2, H3). **Both supported**
+
+Test RMSE (Å), mean of 5 seeds. Unpruned: A 3.81, B 3.84, C 3.78 (validation: 3.74, 3.73, 3.68).
+
+| Sparsity | 30 % | 50 % | 70 % | 90 % | 95 % | 98 % |
+|---|---|---|---|---|---|---|
+| **Before fine-tuning:** A / B / C | 4.35 / 3.89 / 4.60 | 5.69 / 4.08 / 6.15 | 7.97 / **4.61** / 7.39 | 8.59 / **5.86** / 7.82 | 7.51 / 6.40 / 7.15 | 6.74 / 6.45 / 6.69 |
+| **Δ after fine-tuning:** A / B / C | 0.03 / 0.00 / 0.03 | 0.08 / 0.02 / 0.11 | 0.31 / **0.09** / 0.35 | 0.71 / **0.44** / 0.74 | 0.95 / **0.69** / 1.01 | 1.34 / **1.09** / 1.40 |
+
+(Δ = test RMSE after fine-tuning − unpruned test RMSE. Plot: `figures/phase4/pruning_vs_sparsity.png`.)
+
+**Paired comparisons at s ≥ 70 % (pre-registered criterion: smaller Δ in ≥ 4/5 seeds, by more than the
+std of the paired differences, at ≥ 2 of the 4 sparsities):**
+
+| Comparison | Mean Δ difference | Seeds | Meets criterion |
+|---|---|---|---|
+| B vs A | −0.22 to −0.27 Å | 5/5 at every sparsity | **Yes, 4/4 sparsities** → **H2 supported** |
+| B vs C | −0.26 to −0.32 Å | 5/5 at every sparsity | **Yes, 4/4** |
+| C vs A | +0.03 to +0.06 Å (C slightly *worse*) | 0–2/5 better | **No** → with B vs C, **H3 supported** |
+
+**Confounders:**
+- **Dead units:** A 3.6 % ± 3.9, B 0.2 %, C 0.0 %. B has the *fewest*, so "free" sparsity does not explain
+  its robustness.
+- **Fine-tuning LR:** 0.001 is 20 % of A's/C's training LR but 0.5 % of B's. By [2], that favours A and C.
+  B still wins.
+- **Reference point:** measuring Δ against the *fine-tuned* dense network gives the same ranking (B lower by
+  0.19–0.24 Å).
+- **Comparability:** B's unpruned test RMSE is slightly *worse* than A's (3.84 vs 3.81), so B's advantage
+  is not from a better starting point.
+
+**Before fine-tuning** (exploratory): A and C collapse to errors *worse than predicting the mean*
+(6.14 Å) from 70 % sparsity. B stays far better (4.61 Å at 70 %). Their curves come back down at 98 %
+because a nearly empty network outputs almost a constant.
+
+### Post-hoc exploration (added after seeing the results, so not a hypothesis test)
+
+Weight magnitudes of one network per condition (seed 0, `figures/phase4/weight_magnitudes.png`): A and
+C are virtually identical (share of Σw² in the largest 10 % of weights: 56.5 % vs 56.4 %), matching their
+identical pruning behaviour. B's distribution is shifted to larger weights (median |w| 0.084 vs 0.062),
+with more of its weight mass in its largest weights (top 10 %: 60.6 %; top 30 %: 85.6 % vs 83.3 %). A
+network that relies more on a few large weights loses less when magnitude pruning removes the many
+small ones. Untested alternative or complement: large-LR training ends in flatter minima.
+
+### Extensions
+
+**E1: LR rewinding** (Δ measured against each network's own retrained dense version, because rewinding
+also improves the unpruned nets: A 3.81 → 3.79, B 3.84 → **3.72**, C 3.78 → 3.75):
+
+| Sparsity | 70 % | 90 % | 95 % | 98 % |
+|---|---|---|---|---|
+| Fine-tuning Δ: A / B | 0.28 / 0.09 | 0.68 / 0.44 | 0.92 / 0.69 | 1.31 / 1.09 |
+| **LR rewinding Δ: A / B** | 0.22 / **0.02** | 0.58 / **0.03** | 0.81 / **0.15** | 1.14 / **0.45** |
+
+Recovery improves for all conditions, as predicted, but the **A–B gap widens** (0.19 → 0.70 Å, 5/5
+seeds). We predicted it would shrink, so that part is **contradicted**. With rewinding each network
+retrains at its *own* peak LR (B: 0.2, A: 0.005), which reproduces [2]'s finding that a large retraining
+LR recovers better. The large LR that warmup unlocks therefore helps **twice**: it makes the trained
+network more robust, and it makes recovery more effective.
+
+**E2: warmup length at LR 0.2** (5 seeds each):
+
+| Warmup | Unpruned test RMSE | Δ at 70 / 90 / 95 / 98 % |
+|---|---|---|
+| 1 epoch | 3.87 | 0.06 / 0.31 / 0.56 / 1.00 |
+| 5 epochs | 3.84 | 0.09 / 0.44 / 0.69 / 1.09 |
+| 15 epochs | **3.79** | 0.15 / 0.57 / 0.80 / 1.13 |
+
+Even **1 epoch** of warmup is enough to make LR 0.2 trainable. 1 vs 5 epochs: no consistent difference
+(1–2/5 seeds), as the threshold prediction said. But **15 epochs is less robust than 5** (4–5/5 seeds,
+0.04–0.12 Å), while giving the best unpruned RMSE. So the prediction is **partly supported**. A longer
+warmup leaves fewer epochs at the large LR, which fits the "robustness comes from the large LR" picture
+(untested explanation).
+
+### Conclusion (spec step 4)
+
+**We observed the effect.** At matched unpruned accuracy, the warmup-trained network lost 0.22–0.27 Å
+less after pruning and fine-tuning (≥ 70 % sparsity, 5/5 seeds), and far less before fine-tuning.
+
+**The results support the proposed mechanism, on both links:** (1) warmup raises the tolerable LR ≥ 20×
+(without it the network diverges in epoch 1). (2) The robustness comes from the large LR, not warmup
+itself: warmup at the small LR (C) gave **no** benefit. Warmup's effect on pruning robustness is
+therefore **indirect**: it matters because it unlocks a large learning rate. E1 shows the same large LR
+also helps recovery.
+
+**Limitations:** a single tabular dataset and MLP (the original papers used CNNs on images). One-shot
+pruning, not iterative. A single fit/validation split. B's LR was set by our comparability rule at the
+top of the grid. The *reason* large-LR networks are more robust (weight concentration? flatter minima?)
+is only explored post-hoc.

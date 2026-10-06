@@ -9,7 +9,8 @@ We use it to study two things:
 2. **Research investigation:** whether **learning-rate warmup** makes a network more **robust to
    magnitude pruning**, and whether that happens because warmup allows a larger learning rate.
 
-> **Status:** Phases 0–3 done (setup, data preparation, MLP + baseline, core investigation). See [`plan.md`](plan.md) for the task list and progress.
+> **Status:** Phases 0–4 done (setup, data preparation, MLP + baseline, core investigation, warmup/pruning
+> research). Next: final notebook polish and the report (Phase 5). See [`plan.md`](plan.md) for the task list and progress.
 
 ## Documentation map
 
@@ -43,7 +44,8 @@ We use it to study two things:
 │   ├── cv.py                # k-fold cross-validation runner
 │   ├── experiments.py       # experiment grids (configs × seeds), cached in results/
 │   ├── diagnostics.py       # gradient flow, dead units, convergence speed
-│   └── pruning.py           # magnitude pruning and masks
+│   ├── pruning.py           # global magnitude pruning with masks
+│   └── warmup_pruning.py    # Part 2: LR sweep, condition rules, prune + fine-tune
 ├── notebooks/
 │   └── A1_protein_mlp.ipynb # the submitted notebook: narrative + experiments
 ├── tests/                   # small unit tests for the code above
