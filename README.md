@@ -9,7 +9,8 @@ We use it to study two things:
 2. **Research investigation:** whether **learning-rate warmup** makes a network more **robust to
    magnitude pruning**, and whether that happens because warmup allows a larger learning rate.
 
-> **Status:** Phases 0–3 done (setup, data preparation, MLP + baseline, core investigation). See [`plan.md`](plan.md) for the task list and progress.
+> **Status:** Phases 0–4 done (setup, data preparation, MLP + baseline, core investigation, warmup/pruning
+> research). Next: final notebook polish and the report (Phase 5). See [`plan.md`](plan.md) for the task list and progress.
 
 ## Documentation map
 
@@ -19,7 +20,7 @@ We use it to study two things:
 | [`docs/assignment-brief.md`](docs/assignment-brief.md) | Condensed version of the assignment spec |
 | [`docs/01-data-preparation.md`](docs/01-data-preparation.md) | Data prep decisions and justifications |
 | [`docs/02-core-investigation.md`](docs/02-core-investigation.md) | Baseline, then hypotheses, results and verdicts for optimisers, architecture and activations |
-| `docs/03-warmup-pruning.md` | Research hypotheses, design, results *(Phase 4)* |
+| [`docs/03-warmup-pruning.md`](docs/03-warmup-pruning.md) | Research hypotheses, design, results *(Phase 4)* |
 | [`docs/study-notes.md`](docs/study-notes.md) | Theory and Q&A for Semester Test 2 (built up each phase) |
 
 ## Project structure
@@ -43,7 +44,8 @@ We use it to study two things:
 │   ├── cv.py                # k-fold cross-validation runner
 │   ├── experiments.py       # experiment grids (configs × seeds), cached in results/
 │   ├── diagnostics.py       # gradient flow, dead units, convergence speed
-│   └── pruning.py           # magnitude pruning and masks
+│   ├── pruning.py           # global magnitude pruning with masks
+│   └── warmup_pruning.py    # Part 2: LR sweep, condition rules, prune + fine-tune
 ├── notebooks/
 │   └── A1_protein_mlp.ipynb # the submitted notebook: narrative + experiments
 ├── tests/                   # small unit tests for the code above

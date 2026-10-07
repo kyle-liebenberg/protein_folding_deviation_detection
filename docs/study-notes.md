@@ -40,7 +40,7 @@ that because warmup allows a larger learning rate?
   - [A8 Test-prep questions with answers](#a8-test-prep-questions-with-answers)
 - [Part B: The MLP and training](#part-b-the-mlp-and-training) (Phase 2)
 - [Part C: Core investigation](#part-c-core-investigation) (Phase 3)
-- Part D: Warmup and pruning *(Phase 4)*
+- [Part D: Warmup and pruning](#part-d-warmup-and-pruning) (Phase 4)
 
 ---
 
@@ -536,3 +536,108 @@ the LR a network can tolerate. Momentum has a *sharp* tolerance boundary (fine a
 1e-1), so an effect of warmup on that boundary is easy to see. Adam degrades gradually and already
 self-corrects its first steps (bias correction), which would blur the effect. Momentum SGD is also
 what the original papers used.
+
+---
+
+## Part D: Warmup and pruning
+
+Design and results: [`03-warmup-pruning.md`](03-warmup-pruning.md). Notebook section 4.
+
+### D1 Key concepts
+
+- **Learning-rate warmup:** start training with a tiny LR and increase it (here linearly over the first
+  5 epochs) to the target ("peak") LR, then follow the normal schedule (here cosine decay to 0).
+- **Why warmup helps** (Kalra & Barkeshli): at initialisation the loss landscape can be sharp (badly
+  conditioned), and a large step there overshoots and blows up. Small early steps let the network move
+  to a flatter, better-conditioned region, after which a large LR is safe. **Its main benefit is
+  letting you use a larger target LR.**
+- **Magnitude pruning:** remove (set to 0) the weights with the smallest |w|, assuming they matter
+  least. **Sparsity** = fraction of weights removed.
+- **Global vs layer-wise:** global ranks all weights together (layers can end up with different
+  sparsities). Layer-wise prunes the same fraction from each layer. We used global. Biases are not
+  pruned.
+- **One-shot vs iterative:** one-shot prunes to the target sparsity in one go. Iterative alternates
+  pruning a little and retraining (as in the Lottery Ticket paper). We used one-shot.
+- **Masks:** a 0/1 tensor per weight matrix. After every optimiser step during fine-tuning, the weights
+  are multiplied by the mask, or the optimiser (and momentum) would move pruned weights away from 0.
+- **Retraining after pruning** (Renda et al.):
+  - **Fine-tuning:** continue from the final weights with a *small fixed* LR (ours: 0.001, 10 epochs).
+  - **Weight rewinding:** reset the surviving weights to an earlier point in training and retrain with
+    the original schedule.
+  - **LR rewinding:** keep the final weights but retrain with the *original* LR schedule (large LR).
+    Both rewinding methods beat fine-tuning.
+- **Lottery Ticket Hypothesis** (Frankle & Carbin): a dense, randomly initialised network contains a
+  sparse subnetwork (a "winning ticket", often 10–20 % of the weights) that, trained from the *same
+  initial weights*, matches the full network's accuracy. For deeper networks they needed warmup (or a
+  lower LR) to find such tickets.
+
+### D2 The experiment in one paragraph
+
+We trained the same network three ways: **A** without warmup at the largest LR that works without it
+(0.005), **B** with warmup at a much larger LR (0.2) chosen so its unpruned accuracy matched A's, and
+**C** with warmup at A's LR (the control). Then we pruned each at 0–98 % sparsity, fine-tuned all of
+them identically, and compared the error added by pruning (Δ), over 5 seeds.
+
+### D3 What we found
+
+| Hypothesis | Verdict | Key number |
+|---|---|---|
+| H1 warmup raises the tolerable LR | **Strongly supported** | 0.005 → 0.1 (trains at 0.2). ≥ 20×. All no-warmup failures in epoch 1 |
+| H2 at matched accuracy, warmup net is more pruning-robust | **Supported** | Δ smaller by 0.22–0.27 Å at ≥ 70 %, 5/5 seeds |
+| H3 benefit comes from the larger LR, not warmup itself | **Supported** | C (warmup, small LR) ≈ A. B beats C by 0.26–0.32 Å |
+| E1 LR rewinding shrinks the A–B gap | **Contradicted:** the gap widens (0.19 → 0.70 Å) | Large retraining LR helps recovery ([2] reproduced) |
+| E2 longer warmup adds nothing | **Partly:** 1 ≈ 5 epochs, but 15 is *less* robust | Fewer epochs at the large LR |
+
+**Answer to the research question:** warmup improves pruning robustness **indirectly**. It unlocks a
+large learning rate, and the large learning rate is what makes the network robust (and, with LR
+rewinding, helps it recover).
+
+### D4 Test-prep questions with answers
+
+**1. What is learning-rate warmup, and what is its main benefit according to Kalra & Barkeshli?** Start
+with a tiny LR and ramp it up to the target over the first steps/epochs. Main benefit: the network
+tolerates a *larger target LR*, because the small early steps move it to a better-conditioned (less
+sharp) region before the large steps start.
+
+**2. What did our LR sweep show, and why did all failures happen in epoch 1?** Without warmup, LR ≥ 0.01
+diverged (0.005 was the max). With warmup everything up to 0.2 trained. All 17 failures were in the first
+epoch: at initialisation the landscape is sharp, so full-size steps (amplified ~10× by momentum)
+overshoot immediately. Warmup's small first steps avoid exactly this.
+
+**3. Why did we need a control condition C?** A vs B differs in *two* things: warmup *and* LR. If B is
+more robust, we can't tell which caused it. C has warmup but A's LR. C ≈ A while B ≫ both, so the LR is
+the cause and warmup only matters as the enabler.
+
+**4. What does "comparable unpruned accuracy" mean here, and why does it matter?** The spec requires the
+unpruned networks to perform similarly, so that differences after pruning reflect *robustness*, not a
+better starting point. Our pre-registered rule: B's validation RMSE within 0.05 Å of A's (3.73 vs
+3.74 Å). B's test RMSE was even slightly worse than A's.
+
+**5. Why fix the decision rules before running?** Otherwise we could (even unintentionally) pick the B
+learning rate or the threshold that makes the result look best. Committing the rules first (`243937b`)
+means the conditions were chosen mechanically.
+
+**6. How do we know dead units didn't create B's robustness?** Large LRs can kill ReLU units, whose
+weights could then be pruned for free. But B had the *fewest* dead units (0.2 % vs 3.6 % for A), so this
+can't explain it.
+
+**7. Why measure both before and after fine-tuning?** Before fine-tuning shows the raw damage of removing
+weights. After fine-tuning shows how much the network can *recover*. The spec asks for the recovered
+accuracy. B was better on both (dramatically before fine-tuning: 4.6 vs 8.0 Å at 70 %).
+
+**8. Why do pruning masks have to be re-applied after every step?** The gradient of a pruned weight is
+generally non-zero, and momentum keeps pushing too, so one optimiser step would make it non-zero again.
+Multiplying by the mask after each step keeps the network truly sparse.
+
+**9. Why did the A–B gap get *bigger* with LR rewinding?** With rewinding, each network retrains with its
+own schedule: B at LR 0.2, A at 0.005. A large retraining LR recovers better (Renda et al.), so B
+benefits twice: from more robust trained weights and from more effective recovery.
+
+**10. A possible reason a large-LR network is more robust to *magnitude* pruning?** (Post-hoc only.)
+B's weight mass is more concentrated in its largest weights (top 10 % hold 60.6 % of Σw² vs 56.5 % for
+A), so removing the many small weights costs less. Another untested candidate: large-LR training finds
+flatter minima, where zeroing weights changes the loss less.
+
+**11. What are the main limitations?** One dataset and architecture (a tabular MLP, unlike the papers'
+CNNs). One-shot rather than iterative pruning. A single fit/validation split. B's LR at the top of the
+grid. The *why* only explored post-hoc.
