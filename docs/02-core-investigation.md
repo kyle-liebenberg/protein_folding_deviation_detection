@@ -300,6 +300,27 @@ With 8 sigmoid layers the gradient shrinks ≈ 4× per layer going backwards (0.
 
 ---
 
+## Final evaluation on the locked test set
+
+Run once, after all CV comparisons. Same protocol as a CV fold (90 % fit, 10 % early stopping) on the
+whole training set, 5 seeds. Only CV-validated configurations were evaluated. Untested combinations of
+separately-best settings (Adam at 1e-2 with 4 × 256, or tanh) were deliberately not tried, because that
+would mean selecting on the test set. Notebook §3.5, `results/final_test*.csv`.
+
+| Model | CV RMSE (Å) | **Test RMSE (Å)** | Test R² |
+|---|---|---|---|
+| Predict the mean | 6.14 | 6.14 | 0.00 |
+| Linear regression | 5.19 | 5.19 | 0.29 |
+| Baseline 2 × 64 | 4.09 | 4.05 ± 0.04 | 0.566 |
+| **Best: 4 × 256, ReLU, Adam 1e-3** | 3.81 | **3.78 ± 0.03** | **0.621** |
+
+Test and CV agree, so comparing many configurations with CV did not overfit the validation folds.
+
+**Per-bin test errors (the imbalance check), best model:** RMSE 2.75 Å in the common 0–3 Å bin, rising
+to 6.56 Å in the rarest, worst 18–21 Å bin. Bias +1.3 Å (0–3 Å) to −4.8 Å (18–21 Å) shows regression to
+the mean. The larger network helps mostly at the extremes (0–3 Å: 3.08 → 2.75 Å; 18–21 Å: 7.09 → 6.56 Å;
+18–21 Å bias −5.7 → −4.8 Å).
+
 ## Choice of base configuration for Part 2 (warmup vs pruning)
 
 | Choice | Value | Evidence |

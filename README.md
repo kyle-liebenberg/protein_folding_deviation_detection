@@ -9,8 +9,8 @@ We use it to study two things:
 2. **Research investigation:** whether **learning-rate warmup** makes a network more **robust to
    magnitude pruning**, and whether that happens because warmup allows a larger learning rate.
 
-> **Status:** Phases 0–4 done (setup, data preparation, MLP + baseline, core investigation, warmup/pruning
-> research). Next: final notebook polish and the report (Phase 5). See [`plan.md`](plan.md) for the task list and progress.
+> **Status:** Phases 0–4 done, plus the report draft (`report/main.pdf`, 4 pages). Remaining: your rewording
+> of the report, a fresh-environment notebook run, and the submission zip. See [`plan.md`](plan.md) for the task list and progress.
 
 ## Documentation map
 
@@ -45,7 +45,8 @@ We use it to study two things:
 │   ├── experiments.py       # experiment grids (configs × seeds), cached in results/
 │   ├── diagnostics.py       # gradient flow, dead units, convergence speed
 │   ├── pruning.py           # global magnitude pruning with masks
-│   └── warmup_pruning.py    # Part 2: LR sweep, condition rules, prune + fine-tune
+│   ├── warmup_pruning.py    # Part 2: LR sweep, condition rules, prune + fine-tune
+│   └── final_evaluation.py  # one-time evaluation on the locked test set
 ├── notebooks/
 │   └── A1_protein_mlp.ipynb # the submitted notebook: narrative + experiments
 ├── tests/                   # small unit tests for the code above
@@ -68,6 +69,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 pytest                    # run the unit tests. The first run also downloads the dataset
 ```
+
+**Rebuild the report:** `cd report && tectonic main.tex` (figures come from notebook section 5).
 
 The dataset (~3.5 MB) is downloaded from UCI the first time `src.data.load_raw()` is called, and
 cached in `data/raw/protein.csv`. The spec's `ucimlrepo` snippet does not work for this dataset, so we
