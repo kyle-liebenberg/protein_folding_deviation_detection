@@ -1,11 +1,11 @@
 """Regression metrics, all in Å (the units of RMSD).
 
-- RMSE: root mean squared error. Penalises large mistakes heavily. Our headline metric.
+- RMSE: root mean squared error. Penalises large mistakes heavily. The headline metric.
 - MAE:  mean absolute error. The "typical" error size.
 - R²:   fraction of the target's variance explained (1 = perfect, 0 = no better than the mean).
 
 `per_bin_metrics` handles the imbalanced target: the overall RMSE is dominated by the common
-low-RMSD rows, so we also report errors separately for each RMSD bin.
+low-RMSD rows, so errors are also reported separately for each RMSD bin.
 """
 
 import numpy as np
@@ -38,8 +38,8 @@ def regression_metrics(y_true, y_pred) -> dict:
 def per_bin_metrics(y_true, y_pred) -> pd.DataFrame:
     """RMSE, MAE, mean error (bias) and row count for each RMSD bin of the TRUE value.
 
-    A positive bias means the model over-predicts in that bin. We expect the model to over-predict
-    the rare/low bins and under-predict the high bins (regression towards the mean).
+    A positive bias means the model over-predicts in that bin. Models typically over-predict the low
+    bins and under-predict the high bins (regression towards the mean).
     """
     y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
     bins = rmsd_bin(y_true)

@@ -71,8 +71,8 @@ Learning curves: `figures/phase2/baseline_learning_curves.png`.
 5/5 seeds. F5 had been dropped in Phase 1 but carries a small amount of information that the MLP uses.
 Full story in [01 §1](01-data-preparation.md#1-feature-relevance).
 
-**Loss weighting (3 seeds):** inverse-bin-frequency weights *reduce* rare-bin error (0.15–0.54 Å) but
-*raise* error in the two most common bins (+1.02 and +0.51 Å), and overall RMSE worsens 4.09 → 4.31 Å.
+**Loss weighting (3 seeds):** inverse-bin-frequency weights *reduce* rare-bin error (0.13–0.47 Å) but
+*raise* error in the two most common bins (+1.01 and +0.50 Å), and overall RMSE worsens 4.09 → 4.31 Å.
 The high-RMSD bias barely changes (−5.6 → −5.4 Å), so the under-prediction of bad decoys comes from
 the features, not the loss. **Rejected:** we keep plain MSE and handle imbalance through stratification
 and per-bin reporting. Details: [01 §5](01-data-preparation.md#5-imbalance).

@@ -1,77 +1,57 @@
-# Protein Folding Deviation Detection (COS711 Assignment 1)
+# COS711 Assignment 1: MLP on Protein Tertiary Structure
 
-An MLP that predicts the **structural deviation (RMSD, Å)** of candidate protein folds from 9
-physicochemical descriptors (UCI *Physicochemical Properties of Protein Tertiary Structure*, CASP data).
-We use it to study two things:
+An MLP is trained to predict the RMSD (in Å) of candidate protein structures from the CASP experiments,
+using physicochemical features (UCI dataset 265). The project has two parts:
 
-1. **Core investigation:** how MLP design choices (optimiser, architecture, …) affect a regression
-   model, evaluated with k-fold cross-validation.
-2. **Research investigation:** whether **learning-rate warmup** makes a network more **robust to
-   magnitude pruning**, and whether that happens because warmup allows a larger learning rate.
+1. **Core investigation:** how the optimiser, architecture and activation function affect the MLP,
+   compared with 5-fold cross-validation.
+2. **Research investigation:** whether learning-rate warmup makes the network more robust to magnitude
+   pruning, and whether this happens because warmup allows a larger learning rate.
 
-> **Status:** Phases 0–4 done, plus the report draft (`report/main.pdf`, 4 pages). Remaining: your rewording
-> of the report, a fresh-environment notebook run, and the submission zip. See [`plan.md`](plan.md) for the task list and progress.
+The findings are in `report/main.pdf`. The notebook reproduces every result in the report.
 
-## Documentation map
-
-| Doc | Purpose |
-|-----|---------|
-| [`plan.md`](plan.md) | TODO list, decisions needed, decision log |
-| [`docs/assignment-brief.md`](docs/assignment-brief.md) | Condensed version of the assignment spec |
-| [`docs/01-data-preparation.md`](docs/01-data-preparation.md) | Data prep decisions and justifications |
-| [`docs/02-core-investigation.md`](docs/02-core-investigation.md) | Baseline, then hypotheses, results and verdicts for optimisers, architecture and activations |
-| [`docs/03-warmup-pruning.md`](docs/03-warmup-pruning.md) | Research hypotheses, design, results *(Phase 4)* |
-| [`docs/study-notes.md`](docs/study-notes.md) | Theory and Q&A for Semester Test 2 (built up each phase) |
-
-## Project structure
+## Contents
 
 ```
 ├── README.md
-├── plan.md                  # task list
-├── requirements.txt         # pinned dependencies
-├── pytest.ini               # lets tests import `src`
-├── COS711-A1.pdf            # assignment spec (source of truth)
-├── docs/                    # written explanations, which feed the report
-├── src/                     # all reusable code, one concept per file
-│   ├── utils.py             # seeding, device selection
-│   ├── data.py              # loading, cleaning, splitting (train/test, k-fold)
-│   ├── preprocessing.py     # log → clip → standardise, fitted on train only
-│   ├── model.py             # the MLP
-│   ├── schedules.py         # learning-rate schedules (incl. warmup)
-│   ├── training.py          # training loop, early stopping
-│   ├── evaluation.py        # RMSE / MAE / R², per-bin metrics
-│   ├── plotting.py          # shared figure style and colours
-│   ├── cv.py                # k-fold cross-validation runner
-│   ├── experiments.py       # experiment grids (configs × seeds), cached in results/
-│   ├── diagnostics.py       # gradient flow, dead units, convergence speed
-│   ├── pruning.py           # global magnitude pruning with masks
-│   ├── warmup_pruning.py    # Part 2: LR sweep, condition rules, prune + fine-tune
-│   └── final_evaluation.py  # one-time evaluation on the locked test set
+├── requirements.txt
+├── report/
+│   └── main.pdf               # the report
 ├── notebooks/
-│   └── A1_protein_mlp.ipynb # the submitted notebook: narrative + experiments
-├── tests/                   # small unit tests for the code above
-├── results/                 # experiment outputs (CSV/JSON)
-├── figures/                 # saved plots used in the report
-├── report/                  # the 2–4 page technical report
-└── data/                    # cached raw data (git-ignored)
+│   └── A1_protein_mlp.ipynb   # all experiments and results
+├── src/                       # code used by the notebook
+│   ├── data.py                # loading, cleaning and splitting
+│   ├── preprocessing.py       # log transform, clipping and scaling
+│   ├── model.py               # the MLP
+│   ├── schedules.py           # learning-rate schedules, including warmup
+│   ├── training.py            # training loop with early stopping
+│   ├── evaluation.py          # RMSE, MAE, R² and per-bin metrics
+│   ├── cv.py                  # 5-fold cross-validation
+│   ├── experiments.py         # experiment grids for the core investigation
+│   ├── diagnostics.py         # gradient size, dead units, convergence speed
+│   ├── pruning.py             # global magnitude pruning
+│   ├── warmup_pruning.py      # the warmup and pruning experiments
+│   ├── final_evaluation.py    # final evaluation on the test set
+│   ├── plotting.py            # figure style
+│   └── utils.py               # random seeds
+├── results/                   # saved experiment results, reused by the notebook
+└── data/raw/protein.csv       # the dataset
 ```
 
-**Design principle:** the notebook tells the story, and `src/` holds the mechanics. Each `src/` file is
-short and does one thing, so it can be read top to bottom before the test.
+## Running the code
 
-## Setup
-
-Requires Python 3.14 (tested).
+Requires Python 3.14 (other recent versions should also work).
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest                    # run the unit tests. The first run also downloads the dataset
+jupyter notebook notebooks/A1_protein_mlp.ipynb
 ```
 
-**Rebuild the report:** `cd report && tectonic main.tex` (figures come from notebook section 5).
+Then choose **Kernel → Restart & Run All**.
 
-The dataset (~3.5 MB) is downloaded from UCI the first time `src.data.load_raw()` is called, and
-cached in `data/raw/protein.csv`. The spec's `ucimlrepo` snippet does not work for this dataset, so we
-use UCI's direct download link instead.
+- The notebook reuses the saved results in `results/`, so a full run takes about 3 minutes.
+- To retrain every model from scratch, set `RERUN = True` at the start of section 3 (about 15 minutes on
+  a 12-core machine).
+- If `data/raw/protein.csv` is missing, the dataset is downloaded from UCI on the first run.

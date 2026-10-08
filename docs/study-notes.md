@@ -360,8 +360,8 @@ explode nor vanish.
 ### B6 Loss weighting for imbalance: tested, rejected
 
 Weighting each row by the inverse frequency of its RMSD bin makes every bin contribute equally to
-the loss. Result: rare-bin errors fell 0.15–0.54 Å, but the common 0–3 and 3–6 Å bins got much worse
-(+1.02, +0.51 Å), and overall RMSE rose 4.09 → 4.31 Å. The bias at high RMSD barely changed
+the loss. Result: rare-bin errors fell 0.13–0.47 Å, but the common 0–3 and 3–6 Å bins got much worse
+(+1.01, +0.50 Å), and overall RMSE rose 4.09 → 4.31 Å. The bias at high RMSD barely changed
 (−5.6 → −5.4 Å), so the under-prediction of bad decoys is a **feature limitation (regression to the
 mean)**, not a loss-function problem.
 

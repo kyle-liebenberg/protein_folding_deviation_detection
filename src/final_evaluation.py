@@ -15,13 +15,11 @@ from src.data import REPO_ROOT, TARGET, split_train_val
 from src.evaluation import per_bin_metrics, regression_metrics
 from src.preprocessing import Preprocessor
 from src.training import TrainConfig, predict, train
-from src.utils import use_single_cpu_thread
 
 RESULTS_DIR = REPO_ROOT / "results"
 
 
 def _run(label: str, config: TrainConfig, train_df: pd.DataFrame, test_df: pd.DataFrame):
-    use_single_cpu_thread()
     fit_idx, stop_idx = split_train_val(np.arange(len(train_df)), train_df[TARGET].to_numpy())
     fit, stop = train_df.iloc[fit_idx], train_df.iloc[stop_idx]
     prep = Preprocessor().fit(fit)
