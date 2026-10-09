@@ -1,4 +1,4 @@
-% COS711 Assignment 1 report. Build:  cd report && tectonic main.tex
+% COS711 Assignment 1 report. Build:  cd report && tectonic u22608789_report.tex
 % Figures are produced by notebook section 5 (figures/report/*.pdf).
 \documentclass[10pt,a4paper]{article}
 \usepackage[margin=1.8cm]{geometry}
@@ -156,17 +156,17 @@ test set, over 5 seeds. \textbf{Step 1:} train with and without warmup over a gr
 unpruned accuracy) and the control \textbf{C} (warmup at $\eta_0$). \textbf{Step 3:} one-shot global
 magnitude pruning of all weight matrices at 0-98\% sparsity, followed by identical fine-tuning ($\eta=0.001$, 10 epochs,
 pruned weights held at 0 by masks). Robustness is $\Delta(s)$ = test RMSE after fine-tuning minus unpruned test RMSE.
-\textbf{Hypotheses:} \textbf{H1}: warmup raises the maximum stable $\eta$. \textbf{H2}: B has a smaller $\Delta$ than A at
-sparsities $\geq$70\%. \textbf{H3}: the benefit comes from the larger $\eta$, so B beats C while C $\approx$ A.
+\textbf{Hypotheses 1:}: warmup raises the maximum stable $\eta$. \textbf{Hypotheses 2}: B has a smaller $\Delta$ than A at
+sparsities $\geq$70\%. \textbf{Hypotheses 3}: the benefit comes from the larger $\eta$, so B beats C while C $\approx$ A.
 
-\textbf{H1: supported.} Without warmup, the largest stable $\eta$ was 0.005. At $\eta=0.01$, 2/3 seeds diverged, and at
+\textbf{Hypothesis 1 - supported:} Without warmup, the largest stable $\eta$ was 0.005. At $\eta=0.01$, 2/3 seeds diverged, and at
 $\eta\geq0.02$ all did, every time within the first epoch. With warmup all runs trained, up to 0.2
 (Fig.~\ref{fig:warmup}a), a $\geq$20$\times$ increase. This is consistent with Kalra and Barkeshli~[3]: small early steps move the
 network to a better-conditioned region, where large steps are safe. The rules selected $\eta_0=0.005$ and, for B,
 $\eta_1=0.2$ (validation RMSE 3.73 vs 3.74\A). Warmup at $\eta=0.01$-0.03 was $\sim$0.1\A{} better than A and therefore not
 ``comparable''.
 
-\textbf{H2 and H3: supported} (Table~\ref{tab:prune}, Fig.~\ref{fig:warmup}b,c). At matched unpruned accuracy
+\textbf{Hypothesis 2 and Hypothesis 3 - supported:} (Table~\ref{tab:prune}, Fig.~\ref{fig:warmup}b,c). At matched unpruned accuracy
 (B's test RMSE was even slightly worse), B lost 0.22-0.27\A{} less than A, in 5/5 seeds at every sparsity $\geq$70\%.
 Right after pruning the gap is dramatic: at 70\% sparsity B's RMSE is 4.6\A, while A and C jump to 8.0 and 7.4\A,
 worse than predicting the mean. The control is decisive. Warmup at the small $\eta$ (C) brought no benefit,
@@ -184,7 +184,7 @@ leaves fewer epochs at the large $\eta$.
 (its own peak $\eta$) rather than at $\eta=0.001$. Recovery improved for all conditions, but the A-B gap \emph{widened}
 (B lost only 0.03\A{} at 90\% sparsity vs 0.58\A{} for A), contrary to the prediction. The large $\eta$ helps twice:
 it gives more robust weights and more effective retraining.
-\item \emph{Robustness across all warmup $\eta$} (exploratory, not pre-registered; Fig.~\ref{fig:warmup}d). H3 rests on two
+\item \emph{Robustness across all warmup $\eta$} (exploratory, not pre-registered; Fig.~\ref{fig:warmup}d). Hypothesis 3 rests on two
 values of $\eta$, so all seven warmup runs from Step 1 were pruned and fine-tuned. Robustness rises steadily with $\eta$:
 $\Delta_{70\%}$ falls from 0.35 to 0.09\A{} (Spearman $\rho=-0.88$ over 35 runs), even though $\eta=0.01$ gives the best
 unpruned model. Robustness tracks $\eta$, not the starting accuracy.
@@ -193,8 +193,8 @@ unpruned model. Robustness tracks $\eta$, not the starting accuracy.
 \end{itemize}
 
 \textbf{Interpretation and limitations:} The effect reported by Frankle and Carbin~[1] was observed, and the evidence
-supports the proposed mechanism on both links. Warmup raises the tolerable $\eta$ (H1), and the larger $\eta$, not
-warmup itself, produces the robustness (H3 and the sweep over all warmup $\eta$). Warmup's effect on pruning robustness is therefore
+supports the proposed mechanism on both links. Warmup raises the tolerable $\eta$ (Hypohtesis 1), and the larger $\eta$, not
+warmup itself, produces the robustness (Hyphothesis 3 and the sweep over all warmup $\eta$). Warmup's effect on pruning robustness is therefore
 \emph{indirect}. Limitations: a single tabular dataset with an MLP (the original studies used CNNs on images),
 one-shot rather than iterative pruning, a single fit/validation split, and B's $\eta$ lying at the edge of the grid. Large-$\eta$
 training without warmup cannot be tested, because it diverges. Finally, the reason large-$\eta$ networks are robust (weight
