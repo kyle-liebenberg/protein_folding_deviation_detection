@@ -8,7 +8,7 @@ using physicochemical features (UCI dataset 265). The project has two parts:
 2. **Research investigation:** whether learning-rate warmup makes the network more robust to magnitude
    pruning, and whether this happens because warmup allows a larger learning rate.
 
-The findings are in `report/main.pdf`. The notebook reproduces every result in the report.
+The findings are in `report/u22608789_report.pdf`. The notebook reproduces every result in the report.
 
 ## Contents
 
@@ -16,7 +16,7 @@ The findings are in `report/main.pdf`. The notebook reproduces every result in t
 ├── README.md
 ├── requirements.txt
 ├── report/
-│   └── main.pdf               # the report
+│   └── u22608789_report.pdf   # the report
 ├── notebooks/
 │   └── A1_protein_mlp.ipynb   # all experiments and results
 ├── src/                       # code used by the notebook
