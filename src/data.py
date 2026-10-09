@@ -1,11 +1,11 @@
 """Loading, cleaning and splitting the Protein Tertiary Structure dataset (UCI id 265).
 
-Pipeline (each step justified in docs/01-data-preparation.md):
+Pipeline (each step is justified in notebook section 1):
     load_raw()  ->  clean()  ->  split_train_test()  ->  stratified_kfold() / split_train_val()
 Feature transforms (log, clipping, scaling) live in src/preprocessing.py.
 
 Note: the `ucimlrepo` snippet in the spec does NOT work for this dataset. UCI reports id 265 as
-"not available for import". So, as the spec allows, we download the CSV from the dataset page's
+"not available for import". So, as the spec allows, the CSV is downloaded from the dataset page's
 direct link instead.
 """
 
@@ -30,7 +30,7 @@ FEATURES = [f"F{i}" for i in range(1, 10)]  # F1 ... F9, as in the raw file
 # F2 is dropped as REDUNDANT, not uninformative: F2 = F1 × F3 exactly
 # (non-polar exposed area = total area × non-polar fraction). The MLP gains nothing from it.
 # F5 ≈ 138.5 × F1 looked redundant too, but the small deviation (F5/F1 ≈ average mass of the exposed
-# residues) carries information, and the MLP is consistently better with F5. So F5 is kept (docs/01).
+# residues) carries information, and the MLP is consistently better with F5. So F5 is kept.
 DROPPED_FEATURES = ["F2"]
 INPUT_FEATURES = [f for f in FEATURES if f not in DROPPED_FEATURES]  # what the MLP sees
 
@@ -60,7 +60,7 @@ def load_raw(cache_path: Path = RAW_CSV) -> pd.DataFrame:
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
         df = pd.read_csv(archive.open(CSV_NAME_IN_ZIP))
 
-    df = df[FEATURES + [TARGET]]  # the CSV has RMSD first. We put features first, target last
+    df = df[FEATURES + [TARGET]]  # the CSV has RMSD first: reorder to features first, target last
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(cache_path, index=False)
@@ -115,7 +115,7 @@ def split_train_val(indices, y, val_fraction: float = 0.1, seed: int = SPLIT_SEE
     """Split `indices` into (fit_idx, early_stop_idx), stratified on RMSD bin.
 
     Used inside each CV fold: the early-stopping set must be separate from the fold's evaluation set.
-    Otherwise we would pick the stopping epoch using the very data we report on.
+    Otherwise the stopping epoch would be picked using the very data that is reported on.
     """
     indices = np.asarray(indices)
     return train_test_split(

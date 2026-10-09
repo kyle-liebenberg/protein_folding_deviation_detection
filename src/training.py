@@ -6,7 +6,7 @@ One optimiser step, in order:
     3. loss:          mean squared error (optionally weighted per sample)
     4. backward pass: loss.backward() computes dLoss/dWeight for every weight (backpropagation)
     5. update:        optimizer.step() moves every weight against its gradient
-    6. after_step hook (Phase 4 uses it to keep pruned weights at zero)
+    6. after_step hook (used by pruning to keep pruned weights at zero)
 """
 
 import copy
@@ -71,10 +71,11 @@ def train(config: TrainConfig, X_fit, y_fit, X_stop, y_stop, sample_weights=None
           model: MLP | None = None, after_step=None) -> TrainResult:
     """Train on (X_fit, y_fit), early-stopping on (X_stop, y_stop). Returns the best model found.
 
-    Pass `model` to continue training an existing network (fine-tuning in Phase 4). Otherwise a new
+    Pass `model` to continue training an existing network (fine-tuning after pruning). Otherwise a new
     MLP is built from `config`. All arrays must already be preprocessed (standardised).
     """
     start = time.perf_counter()
+    torch.set_num_threads(1)  # small networks train ~3.6x faster on one thread
     set_seed(config.seed)
     if model is None:
         model = MLP(X_fit.shape[1], config.hidden_sizes, config.activation, config.init)

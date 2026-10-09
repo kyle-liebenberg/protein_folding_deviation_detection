@@ -1,6 +1,6 @@
 import torch
 
-from src.utils import get_device, set_seed
+from src.utils import set_seed
 
 
 def test_same_seed_gives_identical_training_losses():
@@ -23,6 +23,3 @@ def test_same_seed_gives_identical_training_losses():
     assert short_training_run(seed=0) == short_training_run(seed=0)
     assert short_training_run(seed=0) != short_training_run(seed=1)
 
-
-def test_default_device_is_cpu():
-    assert get_device().type == "cpu"

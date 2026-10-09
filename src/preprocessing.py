@@ -1,6 +1,6 @@
 """Feature and target transforms, learned from TRAINING data only.
 
-Feature steps, in order (justified in docs/01-data-preparation.md):
+Feature steps, in order (justified in notebook section 1):
     1. select the input features (F2 is dropped, see src/data.py)
     2. log1p on the right-skewed features   -> roughly symmetric distributions
     3. clip to the training 0.5th-99.5th percentiles   -> outliers (mainly F7) can't dominate
@@ -18,7 +18,7 @@ import pandas as pd
 from src.data import INPUT_FEATURES, TARGET
 
 # Features with skewness > 1 in the raw data (F3 and F9 are already roughly symmetric).
-# F2 is listed so the 9-feature comparison in Phase 2 transforms it too.
+# F2 is listed so the 9-feature comparison in notebook section 2 transforms it too.
 LOG_FEATURES = ["F1", "F2", "F4", "F5", "F6", "F7", "F8"]
 CLIP_PERCENTILES = (0.5, 99.5)
 
@@ -26,7 +26,7 @@ CLIP_PERCENTILES = (0.5, 99.5)
 class Preprocessor:
     """Call `fit` on training data, then `transform_X` / `transform_y` on any split.
 
-    `features` defaults to our 8 chosen inputs. Pass a different list to re-check the feature decision.
+    `features` defaults to the 8 chosen inputs. Pass a different list to re-check the feature decision.
     """
 
     def __init__(self, features=INPUT_FEATURES):

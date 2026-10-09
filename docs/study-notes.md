@@ -360,8 +360,8 @@ explode nor vanish.
 ### B6 Loss weighting for imbalance: tested, rejected
 
 Weighting each row by the inverse frequency of its RMSD bin makes every bin contribute equally to
-the loss. Result: rare-bin errors fell 0.15–0.54 Å, but the common 0–3 and 3–6 Å bins got much worse
-(+1.02, +0.51 Å), and overall RMSE rose 4.09 → 4.31 Å. The bias at high RMSD barely changed
+the loss. Result: rare-bin errors fell 0.13–0.47 Å, but the common 0–3 and 3–6 Å bins got much worse
+(+1.01, +0.50 Å), and overall RMSE rose 4.09 → 4.31 Å. The bias at high RMSD barely changed
 (−5.6 → −5.4 Å), so the under-prediction of bad decoys is a **feature limitation (regression to the
 mean)**, not a loss-function problem.
 
@@ -587,6 +587,7 @@ them identically, and compared the error added by pruning (Δ), over 5 seeds.
 | H3 benefit comes from the larger LR, not warmup itself | **Supported** | C (warmup, small LR) ≈ A. B beats C by 0.26–0.32 Å |
 | E1 LR rewinding shrinks the A–B gap | **Contradicted:** the gap widens (0.19 → 0.70 Å) | Large retraining LR helps recovery ([2] reproduced) |
 | E2 longer warmup adds nothing | **Partly:** 1 ≈ 5 epochs, but 15 is *less* robust | Fewer epochs at the large LR |
+| E3 (exploratory) robustness vs warmup LR | **Steady trend** | Δ at 70 %: 0.35 → 0.09 Å as LR goes 0.005 → 0.2. Spearman −0.88 |
 
 **Answer to the research question:** warmup improves pruning robustness **indirectly**. It unlocks a
 large learning rate, and the large learning rate is what makes the network robust (and, with LR
@@ -641,3 +642,13 @@ flatter minima, where zeroing weights changes the loss less.
 **11. What are the main limitations?** One dataset and architecture (a tabular MLP, unlike the papers'
 CNNs). One-shot rather than iterative pruning. A single fit/validation split. B's LR at the top of the
 grid. The *why* only explored post-hoc.
+
+**12. What did the LR dose–response (E3) add?** H3 rested on two LRs. Across all 7 warmup LRs,
+robustness improves steadily with the LR (Spearman −0.88 at 70 %), while unpruned accuracy does *not*
+follow the same order (LR 0.01 is the most accurate but far less robust than 0.2). So robustness tracks
+the LR, not how good the starting model was.
+
+**13. Why evaluate only CV-validated configurations on the test set?** The test set must give an
+unbiased estimate. If we tried several new combinations on it and kept the best, we would be selecting
+on the test set, and its score would be optimistic. The best CV model scored 3.78 Å on test vs 3.81 Å in
+CV, so selection did not overfit.

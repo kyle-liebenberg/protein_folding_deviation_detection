@@ -1,13 +1,13 @@
 """Part 2 (spec §2.3): does learning-rate warmup make the network more robust to pruning?
 
-The design and its decision rules are in docs/03-warmup-pruning.md (committed before running):
+The decision rules below were fixed before any of these experiments ran (notebook section 4):
     Step 1  lr_sweep()          train with/without warmup over an LR grid       -> tests H1
     Step 2  choose_conditions() apply the pre-registered rules -> A, B, C
     Step 3  prune_and_finetune() train each condition, prune at each sparsity,
                                  fine-tune identically, measure test RMSE       -> tests H2, H3
-Optional extensions (docs/03 §6), same machinery:
-    E1  retrain="lr_rewind"      retrain pruned nets with their own schedule instead of fine-tuning
-    E2  warmup_epochs=...        condition B with a shorter/longer warmup
+Optional extensions, same machinery:
+    retrain="lr_rewind"   retrain pruned nets with their own schedule instead of fine-tuning
+    warmup_epochs=...     condition B with a shorter or longer warmup
 Results are cached in results/phase4_*.csv (pass rerun=True to retrain).
 """
 
@@ -24,11 +24,10 @@ from src.evaluation import rmse
 from src.preprocessing import Preprocessor
 from src.pruning import apply_masks, global_magnitude_masks, weight_sparsity
 from src.training import TrainConfig, predict, train
-from src.utils import use_single_cpu_thread
 
 RESULTS_DIR = REPO_ROOT / "results"
 
-# Fixed setup (docs/03 §2)
+# Fixed setup
 BASE = TrainConfig(hidden_sizes=(256, 256, 256, 256), activation="relu", optimizer="momentum",
                    batch_size=256, max_epochs=100, decay="cosine", patience=None)  # fixed budget, final weights
 WARMUP_EPOCHS = 5
@@ -89,7 +88,6 @@ def _rmse_angstrom(model, data: Data, X, y_angstrom) -> float:
 
 # ---------------------------------------------------------------- Step 1: LR-tolerance sweep
 def _sweep_run(data: Data, warmup: bool, lr: float, seed: int) -> dict:
-    use_single_cpu_thread()
     result = train(schedule(warmup, lr, seed), data.X_fit, data.y_fit, data.X_val, data.y_val)
     val_rmse = float("nan") if result.diverged else _rmse_angstrom(result.model, data, data.X_val, data.y_val_angstrom)
     return {"warmup": warmup, "lr": lr, "seed": seed, "diverged": result.diverged,
@@ -140,7 +138,6 @@ def choose_conditions(summary: pd.DataFrame) -> dict:
 # ---------------------------------------------------------------- Step 3: train, prune, fine-tune
 def _condition_run(data: Data, name: str, warmup: bool, lr: float, seed: int,
                    warmup_epochs: float = WARMUP_EPOCHS, retrain: str = "finetune") -> list[dict]:
-    use_single_cpu_thread()
     config = schedule(warmup, lr, seed, warmup_epochs)
     trained = train(config, data.X_fit, data.y_fit, data.X_val, data.y_val).model
     dense_test = _rmse_angstrom(trained, data, data.X_test, data.y_test_angstrom)

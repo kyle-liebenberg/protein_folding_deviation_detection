@@ -71,8 +71,8 @@ Learning curves: `figures/phase2/baseline_learning_curves.png`.
 5/5 seeds. F5 had been dropped in Phase 1 but carries a small amount of information that the MLP uses.
 Full story in [01 §1](01-data-preparation.md#1-feature-relevance).
 
-**Loss weighting (3 seeds):** inverse-bin-frequency weights *reduce* rare-bin error (0.15–0.54 Å) but
-*raise* error in the two most common bins (+1.02 and +0.51 Å), and overall RMSE worsens 4.09 → 4.31 Å.
+**Loss weighting (3 seeds):** inverse-bin-frequency weights *reduce* rare-bin error (0.13–0.47 Å) but
+*raise* error in the two most common bins (+1.01 and +0.50 Å), and overall RMSE worsens 4.09 → 4.31 Å.
 The high-RMSD bias barely changes (−5.6 → −5.4 Å), so the under-prediction of bad decoys comes from
 the features, not the loss. **Rejected:** we keep plain MSE and handle imbalance through stratification
 and per-bin reporting. Details: [01 §5](01-data-preparation.md#5-imbalance).
@@ -299,6 +299,27 @@ With 8 sigmoid layers the gradient shrinks ≈ 4× per layer going backwards (0.
   untested reason: tanh nets are smooth, whereas ReLU nets are piecewise-linear.
 
 ---
+
+## Final evaluation on the locked test set
+
+Run once, after all CV comparisons. Same protocol as a CV fold (90 % fit, 10 % early stopping) on the
+whole training set, 5 seeds. Only CV-validated configurations were evaluated. Untested combinations of
+separately-best settings (Adam at 1e-2 with 4 × 256, or tanh) were deliberately not tried, because that
+would mean selecting on the test set. Notebook §3.5, `results/final_test*.csv`.
+
+| Model | CV RMSE (Å) | **Test RMSE (Å)** | Test R² |
+|---|---|---|---|
+| Predict the mean | 6.14 | 6.14 | 0.00 |
+| Linear regression | 5.19 | 5.19 | 0.29 |
+| Baseline 2 × 64 | 4.09 | 4.05 ± 0.04 | 0.566 |
+| **Best: 4 × 256, ReLU, Adam 1e-3** | 3.81 | **3.78 ± 0.03** | **0.621** |
+
+Test and CV agree, so comparing many configurations with CV did not overfit the validation folds.
+
+**Per-bin test errors (the imbalance check), best model:** RMSE 2.75 Å in the common 0–3 Å bin, rising
+to 6.56 Å in the rarest, worst 18–21 Å bin. Bias +1.3 Å (0–3 Å) to −4.8 Å (18–21 Å) shows regression to
+the mean. The larger network helps mostly at the extremes (0–3 Å: 3.08 → 2.75 Å; 18–21 Å: 7.09 → 6.56 Å;
+18–21 Å bias −5.7 → −4.8 Å).
 
 ## Choice of base configuration for Part 2 (warmup vs pruning)
 

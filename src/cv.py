@@ -2,7 +2,7 @@
 
 For each of the k folds:
     fold's training part  ->  90 % "fit" (weights are learned here) + 10 % "stop" (early stopping)
-    fold's validation part -> scored, in Å (this is the number we report)
+    fold's validation part -> scored, in Å (this is the reported number)
 The preprocessor is fitted on the "fit" rows only, so nothing about the scored rows leaks in.
 
 Every configuration sees exactly the same folds (fixed SPLIT_SEED), so differences between
@@ -19,7 +19,6 @@ from src.data import INPUT_FEATURES, TARGET, inverse_bin_frequency_weights, spli
 from src.evaluation import regression_metrics
 from src.preprocessing import Preprocessor
 from src.training import TrainConfig, predict, train
-from src.utils import use_single_cpu_thread
 
 METRICS = ["rmse", "mae", "r2"]
 
@@ -84,7 +83,7 @@ def cross_validate_many(configs: list[TrainConfig], train_df: pd.DataFrame, k: i
 
 
 def cross_validate_sklearn(make_model, train_df: pd.DataFrame, k: int = 5, features=INPUT_FEATURES) -> CVResult:
-    """Same folds and preprocessing, but for a scikit-learn regressor (our simple baselines)."""
+    """Same folds and preprocessing, but for a scikit-learn regressor (the simple baselines)."""
     rows, preds = [], []
     for fold, (fit_idx, stop_idx, val_idx) in enumerate(fold_splits(train_df, k)):
         prep, (X_fit, y_fit), _, (X_val, y_val_angstrom) = _prepare(train_df, fit_idx, stop_idx, val_idx, features)
@@ -110,7 +109,6 @@ def _predictions_frame(val_idx, fold, y_true, y_pred) -> pd.DataFrame:
 
 
 def _run_mlp_fold(config, df, fold, splits, features):
-    use_single_cpu_thread()  # faster for tiny networks, and parallel folds don't compete for cores
     fit_idx, stop_idx, val_idx = splits
     prep, (X_fit, y_fit), (X_stop, y_stop), (X_val, y_val_angstrom) = _prepare(df, fit_idx, stop_idx, val_idx, features)
     weights = inverse_bin_frequency_weights(df.iloc[fit_idx][TARGET]) if config.weighted_loss else None

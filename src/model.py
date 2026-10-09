@@ -42,7 +42,7 @@ class MLP(nn.Module):
         return self.net(x)
 
     def linear_layers(self) -> list[nn.Linear]:
-        """All weight layers, in order. Used by pruning (Phase 4)."""
+        """All weight layers, in order. Used by pruning."""
         return [m for m in self.net if isinstance(m, nn.Linear)]
 
     def reset_parameters(self, scheme: str) -> None:

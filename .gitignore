@@ -221,3 +221,6 @@ __marimo__/
 plan.md
 # Project: cached raw data (re-downloaded by src/data.py if missing)
 data/
+
+# Submission archive
+*.zip

@@ -97,12 +97,12 @@ based on the correlations and the tree model. Phase 2 re-checked with the **MLP 
 
 | Inputs | CV RMSE (Å), mean of 5 seeds | Better than the 7-feature set in |
 |---|---|---|
-| 7: drop F2 and F5 | 4.153 | — |
-| 8: drop F5 only | 4.160 | 3/5 seeds (noise) |
-| **8: drop F2 only (chosen)** | **4.097** | **5/5 seeds** |
-| 9: all | 4.115 | 4/5 seeds |
+| 7: drop F2 and F5 | 4.157 | — |
+| 8: drop F5 only | 4.148 | 3/5 seeds (noise) |
+| **8: drop F2 only (chosen)** | **4.098** | **5/5 seeds** |
+| 9: all | 4.118 | 5/5 seeds |
 
-- **F2:** adding it back changes nothing meaningful (+0.018 Å, within seed noise). It is an exact
+- **F2:** adding it back changes nothing meaningful (+0.02 Å, within seed noise). It is an exact
   product of other features, so it's dropped.
 - **F5:** removing it costs ~0.06 Å, consistently. After `log1p`, log F5 − log F1 is *exactly* the log
   of the informative ratio. That's a simple difference an MLP's first layer computes with two weights.
@@ -222,7 +222,7 @@ show too.
 - **Training:** stratified CV folds and early-stopping splits, so every fold sees every RMSD range in
   the same proportion. Loss: **plain (unweighted) MSE**. Phase 2 (notebook §2.4) tested
   inverse-bin-frequency sample weights and **rejected** them. They cut the error in the five rarer
-  bins by 0.15–0.54 Å but raised it in the two most common bins (0–3 Å: +1.02 Å, 3–6 Å: +0.51 Å; 53 %
+  bins by 0.13–0.47 Å but raised it in the two most common bins (0–3 Å: +1.01 Å, 3–6 Å: +0.50 Å; 53 %
   of rows), so overall RMSE got worse (4.09 → 4.31 Å). They also hardly reduced the under-prediction
   of high RMSD (bias −5.6 → −5.4 Å). That error comes from the features not separating bad decoys
   well, not from the loss ignoring them.

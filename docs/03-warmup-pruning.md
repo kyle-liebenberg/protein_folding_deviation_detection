@@ -217,6 +217,24 @@ Even **1 epoch** of warmup is enough to make LR 0.2 trainable. 1 vs 5 epochs: no
 warmup leaves fewer epochs at the large LR, which fits the "robustness comes from the large LR" picture
 (untested explanation).
 
+**E3: LR dose–response (exploratory, *not* pre-registered; added 2026-10-07 to strengthen H3).** H3
+rests on two LR points (C at 0.005, B at 0.2). If the large LR causes the robustness, then among
+warmup-trained networks Δ should shrink as the LR grows. All 7 warmup LRs, 5 seeds each
+(`results/phase4_ext_lr_dose.csv`, notebook §4.4):
+
+| Warmup LR | 0.005 | 0.01 | 0.02 | 0.03 | 0.05 | 0.1 | 0.2 |
+|---|---|---|---|---|---|---|---|
+| Unpruned test RMSE | 3.78 | **3.76** | 3.79 | 3.82 | 3.84 | 3.84 | 3.84 |
+| Δ at 70 % | 0.35 | 0.26 | 0.19 | 0.14 | **0.09** | 0.12 | **0.09** |
+| Δ at 90 % | 0.74 | 0.65 | 0.54 | 0.51 | 0.49 | 0.51 | **0.44** |
+| Test RMSE at 70 %, before fine-tuning | 7.39 | 7.09 | 6.89 | 6.27 | 5.86 | 5.16 | **4.61** |
+
+Robustness rises steadily with the LR. The Spearman correlation between LR and Δ is −0.88 (70 %) to
+−0.70 (98 %) over 35 runs. After fine-tuning the gain levels off from ~0.05. Right after pruning it keeps
+improving to 0.2. **Robustness does not follow unpruned accuracy:** LR 0.01 gives the best unpruned model
+but is far less robust than 0.2. That supports "the LR causes the robustness" beyond the two-point
+comparison.
+
 ### Conclusion (spec step 4)
 
 **We observed the effect.** At matched unpruned accuracy, the warmup-trained network lost 0.22–0.27 Å
@@ -224,7 +242,8 @@ less after pruning and fine-tuning (≥ 70 % sparsity, 5/5 seeds), and far less 
 
 **The results support the proposed mechanism, on both links:** (1) warmup raises the tolerable LR ≥ 20×
 (without it the network diverges in epoch 1). (2) The robustness comes from the large LR, not warmup
-itself: warmup at the small LR (C) gave **no** benefit. Warmup's effect on pruning robustness is
+itself: warmup at the small LR (C) gave **no** benefit, and among warmup networks robustness rises
+steadily with the LR (E3). Warmup's effect on pruning robustness is
 therefore **indirect**: it matters because it unlocks a large learning rate. E1 shows the same large LR
 also helps recovery.
 
